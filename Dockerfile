@@ -9,7 +9,7 @@ RUN apt update && \
     apt install -y vim tree wget curl git unzip ninja-build && \
     apt install -y zsh && \
     apt install -y libeigen3-dev python3-catkin-tools libgl1-mesa-dev libglew-dev && \
-    apt install -y ros-${ROS_DISTRO}-cv-bridge && \
+    apt install -y ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-image-transport && \
     apt install -y ros-${ROS_DISTRO}-tf-conversions ros-${ROS_DISTRO}-tf ros-${ROS_DISTRO}-tf2 && \
     apt install -y ros-${ROS_DISTRO}-hector-trajectory-server && \
     DEBIAN_FRONTEND=noninteractive apt install -y keyboard-configuration && \
