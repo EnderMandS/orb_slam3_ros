@@ -1,58 +1,48 @@
-FROM amd64/ros:noetic-perception-focal
+FROM ros:noetic-ros-base-focal
 
-ARG DEBIAN_FRONTEND=noninteractive
-ARG ROS_DISTRO=noetic
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO noetic
+ARG USERNAME=m
+ARG PROJECT_NAME=orbslam3
 
-#
-# install ORBSLAM3 ROS package
-#
+RUN apt update && \
+    apt install -y vim tree wget curl git unzip ninja-build && \
+    apt install -y zsh && \
+    apt install -y libeigen3-dev python3-catkin-tools && \
+    apt install -y ros-${ROS_DISTRO}-cv-bridge && \
+    apt install -y ros-${ROS_DISTRO}-tf-conversions ros-${ROS_DISTRO}-tf ros-${ROS_DISTRO}-tf2 && \
+    apt install -y ros-${ROS_DISTRO}-hector-trajectory-server && \
+    DEBIAN_FRONTEND=noninteractive apt install -y keyboard-configuration && \
+    apt clean && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        software-properties-common \
-        git \
-        build-essential \
-        cmake \
-        libeigen3-dev \
-        ros-${ROS_DISTRO}-hector-trajectory-server \
-        python3-catkin-tools \
-        libopencv-dev && \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
-
-WORKDIR /root
-
+# install Pangolin
+WORKDIR /pkg/pangolin
 RUN git clone https://github.com/stevenlovegrove/Pangolin.git && \
-    cd Pangolin && \
-    mkdir build && cd build && \
-    cmake .. && \
-    make -j && \
-    make install
+    cd Pangolin && mkdir build && cd build && \
+    cmake -GNinja .. && \
+    ninja && ninja install && ninja clean
 
-RUN mkdir -p catkin_ws/src && \
-    cd catkin_ws/src && \
-    git clone https://github.com/thien94/orb_slam3_ros.git && \
-    cd .. && \
-    catkin config \
-      --extend /opt/ros/noetic && \
-    catkin build
+# setup user
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+USER $USERNAME
 
-RUN echo "source /root/catkin_ws/devel/setup.bash" >> /root/.bashrc
+# install zsh & set zsh as the default shell
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
+    git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting && \
+    sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/g' /home/$USERNAME/.zshrc
+SHELL ["/bin/zsh", "-c"]
 
-#
-# install RealSenseSDK / RealSense ROS wrapper
-#
+WORKDIR /home/${USERNAME}/ros_ws
+RUN git clone --depth 1 --recursive https://github.com/EnderMandS/orb_slam3_ros.git src && \
+    chmod 777 -R /home/${USERNAME}/ros_ws && . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    catkin_make -DCATKIN_WHITELIST_PACKAGES="" -DCMAKE_BUILD_TYPE=Release && \
+    echo "source /home/m/ros_ws/devel/setup.zsh" >> /home/${USERNAME}/.zshrc
 
-RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE || apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-key F6E65AC044F831AC80A06380C8B3A55A6F3EFCDE
-RUN add-apt-repository "deb https://librealsense.intel.com/Debian/apt-repo $(lsb_release -sc) main"
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libssl-dev \
-        libudev-dev \
-        libusb-1.0-0-dev \
-        librealsense2-dev \
-        librealsense2-utils \
-        ros-${ROS_DISTRO}-realsense2-camera &&  \
-    rm -rf /var/lib/apt/lists/* && \
-    apt-get clean
+ENTRYPOINT [ "/bin/zsh" ]
+# ENTRYPOINT [ "/home/m/code/ros_ws/setup.zsh" ]
