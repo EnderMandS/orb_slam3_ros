@@ -15,7 +15,7 @@
         <param name="world_frame_id"    type="string"   value="world" />
         <param name="cam_frame_id"      type="string"   value="camera" />
         <param name="imu_frame_id"      type="string"   value="imu" />
-        <param name="enable_pangolin"   type="bool"     value="false" />
+        <!-- <param name="enable_pangolin"   type="bool"     value="false" /> -->
     </node>
     
     <!-- Trajectory path -->

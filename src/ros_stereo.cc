@@ -44,12 +44,12 @@ int main(int argc, char **argv)
     node_handler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "map");
     node_handler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
 
-    bool enable_pangolin;
-    node_handler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
+    // bool enable_pangolin;
+    // node_handler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
     
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     sensor_type = ORB_SLAM3::System::STEREO;
-    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sensor_type, enable_pangolin);
+    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sensor_type, false);
 
     ImageGrabber igb;
 

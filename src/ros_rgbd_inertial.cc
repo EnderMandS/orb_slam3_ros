@@ -58,8 +58,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    bool enable_pangolin;
-    node_handler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
+    // bool enable_pangolin;
+    // node_handler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
 
     node_handler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "map");
     node_handler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     sensor_type = ORB_SLAM3::System::IMU_RGBD;
-    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sensor_type, enable_pangolin);
+    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sensor_type, false);
 
     ImuGrabber imugb;
     ImageGrabber igb(&imugb);
@@ -140,7 +140,7 @@ void ImageGrabber::SyncWithImu()
             double tIm = 0;
 
             tIm = imgRGBBuf.front()->header.stamp.toSec();
-            if (tIm > mpImuGb->imuBuf.back()->header.stamp.toSec())
+            if (tIm >= mpImuGb->imuBuf.back()->header.stamp.toSec())
                 continue;
             
             this->mBufMutex.lock();

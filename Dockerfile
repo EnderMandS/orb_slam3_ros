@@ -20,7 +20,8 @@ WORKDIR /pkg/pangolin
 RUN git clone https://github.com/stevenlovegrove/Pangolin.git && \
     cd Pangolin && mkdir build && cd build && \
     cmake -GNinja .. && \
-    ninja && ninja install && ninja clean
+    ninja && ninja install && ninja clean && \
+    ldconfig
 
 # setup user
 ARG USER_UID=1000
