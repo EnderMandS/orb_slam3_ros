@@ -5,6 +5,7 @@
 */
 
 #include "common.h"
+#include <algorithm>
 
 using namespace std;
 
@@ -98,20 +99,22 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabImageLeft(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    mBufMutexLeft.lock();
-    if (!imgLeftBuf.empty())
-        imgLeftBuf.pop();
-    imgLeftBuf.push(img_msg);
-    mBufMutexLeft.unlock();
+    if (!mBufMutexLeft.try_lock()) {
+        if (!imgLeftBuf.empty())
+            imgLeftBuf.pop();
+        imgLeftBuf.push(img_msg);
+        mBufMutexLeft.unlock();
+    }
 }
 
 void ImageGrabber::GrabImageRight(const sensor_msgs::ImageConstPtr &img_msg)
 {
-    mBufMutexRight.lock();
-    if (!imgRightBuf.empty())
-        imgRightBuf.pop();
-    imgRightBuf.push(img_msg);
-    mBufMutexRight.unlock();
+    if (!mBufMutexRight.try_lock()) {
+        if (!imgRightBuf.empty())
+            imgRightBuf.pop();
+        imgRightBuf.push(img_msg);
+        mBufMutexRight.unlock();
+    }
 }
 
 cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
@@ -151,7 +154,7 @@ void ImageGrabber::SyncWithImu()
             tImRight = imgRightBuf.front()->header.stamp.toSec();
 
             this->mBufMutexRight.lock();
-            while((tImLeft-tImRight)>maxTimeDiff && imgRightBuf.size()>1)
+            while(abs(tImLeft-tImRight)>maxTimeDiff && imgRightBuf.size()>1)
             {
                 imgRightBuf.pop();
                 tImRight = imgRightBuf.front()->header.stamp.toSec();
@@ -159,20 +162,20 @@ void ImageGrabber::SyncWithImu()
             this->mBufMutexRight.unlock();
 
             this->mBufMutexLeft.lock();
-            while((tImRight-tImLeft)>maxTimeDiff && imgLeftBuf.size()>1)
+            while(abs(tImRight-tImLeft)>maxTimeDiff && imgLeftBuf.size()>1)
             {
                 imgLeftBuf.pop();
                 tImLeft = imgLeftBuf.front()->header.stamp.toSec();
             }
             this->mBufMutexLeft.unlock();
 
-            if((tImLeft-tImRight)>maxTimeDiff || (tImRight-tImLeft)>maxTimeDiff)
+            if(abs(tImLeft-tImRight)>maxTimeDiff)
             {
                 // std::cout << "big time difference" << std::endl;
                 continue;
             }
-            if(tImLeft>mpImuGb->imuBuf.back()->header.stamp.toSec())
-                continue;
+            // if(std::min(tImLeft,tImRight)>mpImuGb->imuBuf.back()->header.stamp.toSec())
+            //     continue;
 
             this->mBufMutexLeft.lock();
             imLeft = GetImage(imgLeftBuf.front());
@@ -192,7 +195,7 @@ void ImageGrabber::SyncWithImu()
             {
                 // Load imu measurements from buffer
                 vImuMeas.clear();
-                while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=tImLeft)
+                while(!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec()<=std::min(tImLeft,tImRight))
                 {
                     double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
 
@@ -214,9 +217,9 @@ void ImageGrabber::SyncWithImu()
 
             publish_topics(msg_time, Wbb);
             
-            std::chrono::milliseconds tSleep(1);
-            std::this_thread::sleep_for(tSleep);
         }
+        std::chrono::milliseconds tSleep(1);
+        std::this_thread::sleep_for(tSleep);
     }
 }
 

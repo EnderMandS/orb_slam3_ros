@@ -13,7 +13,7 @@
         <param name="settings_file" type="string" value="$(find orb_slam3_ros)/config/RGB-D-Inertial/gemini2.yaml"/>
 
         <!-- Parameters for ROS -->
-        <param name="world_frame_id"    type="string"   value="world" />
+        <param name="world_frame_id"    type="string"   value="odom" />
         <param name="cam_frame_id"      type="string"   value="camera" />
         <param name="imu_frame_id"      type="string"   value="imu" />
         <!-- <param name="enable_pangolin"   type="bool"     value="false" /> -->
