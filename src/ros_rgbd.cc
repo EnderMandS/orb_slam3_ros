@@ -14,6 +14,11 @@ public:
     ImageGrabber(){};
 
     void GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const sensor_msgs::ImageConstPtr& msgD);
+    cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
+    void track(void);
+
+    queue<sensor_msgs::ImageConstPtr> imgRGBBuf, imgDBuf;
+    std::mutex mBufMutex;
 };
 
 int main(int argc, char **argv)
@@ -62,6 +67,8 @@ int main(int argc, char **argv)
     setup_publishers(node_handler, image_transport, node_name);
     setup_services(node_handler, node_name);
 
+    std::thread sync_thread(&ImageGrabber::track, &igb);
+
     ros::spin();
 
     // Stop all threads
@@ -77,33 +84,46 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const sensor_msgs::ImageConstPtr& msgD)
 {
+    mBufMutex.lock();
+    if (!imgRGBBuf.empty()) {
+        imgRGBBuf.pop();
+        imgDBuf.pop();
+    }
+    imgRGBBuf.push(msgRGB);
+    imgDBuf.push(msgD);
+    mBufMutex.unlock();
+}
+cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
+{
     // Copy the ros image message to cv::Mat.
-    cv_bridge::CvImageConstPtr cv_ptrRGB;
+    cv_bridge::CvImageConstPtr cv_ptr;
     try
     {
-        cv_ptrRGB = cv_bridge::toCvShare(msgRGB);
+        cv_ptr = cv_bridge::toCvShare(img_msg);
     }
     catch (cv_bridge::Exception& e)
     {
         ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
     }
+    return cv_ptr->image.clone();
+}
 
-    cv_bridge::CvImageConstPtr cv_ptrD;
-    try
-    {
-        cv_ptrD = cv_bridge::toCvShare(msgD);
+void ImageGrabber::track(void) {
+    while (true) {
+        if (!imgRGBBuf.empty()) {
+            if (!mBufMutex.try_lock()) {
+                double tIm = imgRGBBuf.front()->header.stamp.toSec();  // image time
+                ros::Time msg_time = imgRGBBuf.front()->header.stamp;
+                cv::Mat im = GetImage(imgRGBBuf.front());
+                cv::Mat depth = GetImage(imgDBuf.front());
+                imgRGBBuf.pop();
+                imgDBuf.pop();
+                mBufMutex.unlock();
+                pSLAM->TrackRGBD(im, depth, tIm);
+                publish_topics(msg_time);
+            }
+        }
+        std::chrono::milliseconds tSleep(1);
+        std::this_thread::sleep_for(tSleep);
     }
-    catch (cv_bridge::Exception& e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-    }
-    
-    // ORB-SLAM3 runs in TrackRGBD()
-    Sophus::SE3f Tcw = pSLAM->TrackRGBD(cv_ptrRGB->image, cv_ptrD->image, cv_ptrRGB->header.stamp.toSec());
-
-    ros::Time msg_time = cv_ptrRGB->header.stamp;
-
-    publish_topics(msg_time);
 }
