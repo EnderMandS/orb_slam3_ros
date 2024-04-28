@@ -12,7 +12,7 @@
         <param name="settings_file" type="string" value="$(find orb_slam3_ros)/config/RGB-D/gemini2.yaml"/>
 
         <!-- Parameters for ROS -->
-        <param name="world_frame_id"    type="string"   value="odom" />
+        <param name="world_frame_id"    type="string"   value="odom_camera" />
         <param name="cam_frame_id"      type="string"   value="camera" />
         <!-- <param name="enable_pangolin"   type="bool"     value="false" /> -->
     </node>
@@ -21,7 +21,7 @@
     <node pkg="hector_trajectory_server" type="hector_trajectory_server" name="trajectory_server_orb_slam3" output="screen" ns="orb_slam3_ros" >
         <param name="/target_frame_name" value="/odom" />
         <param name="/source_frame_name" value="/camera" />
-        <param name="/trajectory_update_rate" value="20.0" />
-        <param name="/trajectory_publish_rate" value="20.0" />
+        <param name="/trajectory_update_rate" value="10.0" />
+        <param name="/trajectory_publish_rate" value="10.0" />
     </node>
 </launch>

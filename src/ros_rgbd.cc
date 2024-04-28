@@ -19,6 +19,7 @@ public:
 
     queue<sensor_msgs::ImageConstPtr> imgRGBBuf, imgDBuf;
     std::mutex mBufMutex;
+    int frame_drop_cnt=0;
 };
 
 int main(int argc, char **argv)
@@ -88,6 +89,7 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
     if (!imgRGBBuf.empty()) {
         imgRGBBuf.pop();
         imgDBuf.pop();
+        ++frame_drop_cnt;
     }
     imgRGBBuf.push(msgRGB);
     imgDBuf.push(msgD);
@@ -118,8 +120,12 @@ void ImageGrabber::track(void) {
                 cv::Mat depth = GetImage(imgDBuf.front());
                 imgRGBBuf.pop();
                 imgDBuf.pop();
+                // ROS_INFO("Frame drop: %d.", frame_drop_cnt);
+                frame_drop_cnt = 0;
                 mBufMutex.unlock();
+                double t_start = ros::Time::now().toSec();
                 pSLAM->TrackRGBD(im, depth, tIm);
+                // ROS_INFO("Track time: %.3fms.", (ros::Time::now().toSec() - t_start) * 1000.f);
                 publish_topics(msg_time);
             }
         }
