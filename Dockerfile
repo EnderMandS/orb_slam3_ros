@@ -1,6 +1,6 @@
 FROM ros:noetic-ros-base-focal
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND noninteractive
 ENV ROS_DISTRO noetic
 ARG USERNAME=m
 ARG PROJECT_NAME=orbslam3
@@ -17,7 +17,7 @@ RUN apt update && \
 
 # install Pangolin
 WORKDIR /pkg/pangolin
-RUN git clone https://github.com/stevenlovegrove/Pangolin.git && \
+RUN git clone --recursive https://github.com/stevenlovegrove/Pangolin.git && \
     cd Pangolin && mkdir build && cd build && \
     cmake -GNinja .. && \
     ninja && ninja install && ninja clean && \
