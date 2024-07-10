@@ -125,7 +125,7 @@ void ImageGrabber::track(void) {
                 mBufMutex.unlock();
                 double t_start = ros::Time::now().toSec();
                 pSLAM->TrackRGBD(im, depth, tIm);
-                // ROS_INFO("Track time: %.3fms.", (ros::Time::now().toSec() - t_start) * 1000.f);
+                ROS_INFO("Track time: %.3fms.", (ros::Time::now().toSec() - t_start) * 1000.f);
                 publish_topics(msg_time);
             }
         }

@@ -90,6 +90,7 @@ void publish_topics(ros::Time msg_time, Eigen::Vector3f Wbb)
         return;
     
     // Common topics
+    msg_time = ros::Time::now();
     publish_camera_pose(Twc, msg_time);
     publish_tf_transform(Twc, world_frame_id, cam_frame_id, msg_time);
 
