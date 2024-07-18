@@ -3,6 +3,21 @@
 A ROS implementation of [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) V1.0 that focuses on the ROS part.
 
 This package uses ```catkin build```. Tested on Ubuntu 20.04.
+
+Only RGB-D tested. RGB-D-I Bug.
+
+## Docker
+
+```
+docker pull endermands/orbslam3:latest
+docker run -itd --net host --name orbslam3 endermands/orbslam3:latest
+```
+For Mainland China
+```
+docker pull ccr.ccs.tencentyun.com/endermands/orbslam3:latest
+docker run -itd --net host --name orbslam3 ccr.ccs.tencentyun.com/endermands/orbslam3:latest
+```
+
 ## 1. Prerequisites
 ### Eigen3
 ```

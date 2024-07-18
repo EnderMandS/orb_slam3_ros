@@ -103,19 +103,19 @@ void publish_topics(ros::Time msg_time, Eigen::Vector3f Wbb)
     publish_kf_markers(pSLAM->GetAllKeyframePoses(), msg_time);
 
     // IMU-specific topics
-    if (sensor_type == ORB_SLAM3::System::IMU_MONOCULAR || sensor_type == ORB_SLAM3::System::IMU_STEREO || sensor_type == ORB_SLAM3::System::IMU_RGBD)
-    {
-        // Body pose and translational velocity can be obtained from ORB-SLAM3
-        Sophus::SE3f Twb = pSLAM->GetImuTwb();
-        Eigen::Vector3f Vwb = pSLAM->GetImuVwb();
+    // if (sensor_type == ORB_SLAM3::System::IMU_MONOCULAR || sensor_type == ORB_SLAM3::System::IMU_STEREO || sensor_type == ORB_SLAM3::System::IMU_RGBD)
+    // {
+    //     // Body pose and translational velocity can be obtained from ORB-SLAM3
+    //     Sophus::SE3f Twb = pSLAM->GetImuTwb();
+    //     Eigen::Vector3f Vwb = pSLAM->GetImuVwb();
 
-        // IMU provides body angular velocity in body frame (Wbb) which is transformed to world frame (Wwb)
-        Sophus::Matrix3f Rwb = Twb.rotationMatrix();
-        Eigen::Vector3f Wwb = Rwb * Wbb;
+    //     // IMU provides body angular velocity in body frame (Wbb) which is transformed to world frame (Wwb)
+    //     Sophus::Matrix3f Rwb = Twb.rotationMatrix();
+    //     Eigen::Vector3f Wwb = Rwb * Wbb;
 
-        publish_tf_transform(Twb, world_frame_id, imu_frame_id, msg_time);
-        publish_body_odom(Twb, Vwb, Wwb, msg_time);
-    }
+    //     publish_tf_transform(Twb, world_frame_id, imu_frame_id, msg_time);
+    //     publish_body_odom(Twb, Vwb, Wwb, msg_time);
+    // }
 }
 
 void publish_body_odom(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::Vector3f ang_vel_body, ros::Time msg_time)
@@ -221,15 +221,19 @@ void publish_keypoints(std::vector<ORB_SLAM3::MapPoint*> tracked_map_points, std
 
 void publish_tracked_points(std::vector<ORB_SLAM3::MapPoint*> tracked_points, ros::Time msg_time)
 {
+    if (tracked_points.size() == 0) {
+        return;
+    }
     sensor_msgs::PointCloud2 cloud = mappoint_to_pointcloud(tracked_points, msg_time);
-    
     tracked_mappoints_pub.publish(cloud);
 }
 
 void publish_all_points(std::vector<ORB_SLAM3::MapPoint*> map_points, ros::Time msg_time)
 {
+    if (map_points.size() == 0) {
+        return;
+    }
     sensor_msgs::PointCloud2 cloud = mappoint_to_pointcloud(map_points, msg_time);
-    
     all_mappoints_pub.publish(cloud);
 }
 
@@ -316,11 +320,6 @@ sensor_msgs::PointCloud2 keypoints_to_pointcloud(std::vector<cv::KeyPoint>& keyp
 sensor_msgs::PointCloud2 mappoint_to_pointcloud(std::vector<ORB_SLAM3::MapPoint*> map_points, ros::Time msg_time)
 {
     const int num_channels = 3; // x y z
-
-    if (map_points.size() == 0)
-    {
-        std::cout << "Map point vector is empty!" << std::endl;
-    }
 
     sensor_msgs::PointCloud2 cloud;
 

@@ -29,7 +29,7 @@ Camera.fps: 30
 Camera.RGB: 1
 
 # Close/Far threshold. Baseline times.
-Stereo.ThDepth: 40.0
+Stereo.ThDepth: 20.0
 Stereo.b: 0.0745
 
 # Depth map values factor

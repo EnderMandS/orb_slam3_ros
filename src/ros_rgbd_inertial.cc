@@ -13,6 +13,7 @@ class ImuGrabber
 public:
     ImuGrabber(){};
     void GrabImu(const sensor_msgs::ImuConstPtr &imu_msg);
+    void sortImuQueue();
 
     queue<sensor_msgs::ImuConstPtr> imuBuf, imuBuf_front;
     std::mutex mBufMutex;
@@ -27,8 +28,7 @@ public:
     cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
     void SyncWithImu();
 
-    queue<sensor_msgs::ImageConstPtr> imgRGBBuf, imgDBuf;
-    queue<sensor_msgs::ImageConstPtr> imgRGBBuf_front, imgDBuf_front;
+    sensor_msgs::ImageConstPtr imgRGB=nullptr, imgD=nullptr;
     std::mutex mBufMutex;
     ImuGrabber *mpImuGb;
 };
@@ -59,10 +59,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // bool enable_pangolin;
-    // node_handler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
-
-    node_handler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "map");
+    node_handler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "world");
     node_handler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
     node_handler.param<std::string>(node_name + "/imu_frame_id", imu_frame_id, "imu");
 
@@ -73,10 +70,10 @@ int main(int argc, char **argv)
     ImuGrabber imugb;
     ImageGrabber igb(&imugb);
 
-    ros::Subscriber sub_imu = node_handler.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb);
+    ros::Subscriber sub_imu = node_handler.subscribe("imu", 1000, &ImuGrabber::GrabImu, &imugb);
 
-    message_filters::Subscriber<sensor_msgs::Image> sub_rgb_img(node_handler, "/camera/rgb/image_raw", 100);
-    message_filters::Subscriber<sensor_msgs::Image> sub_depth_img(node_handler, "/camera/depth_registered/image_raw", 100);
+    message_filters::Subscriber<sensor_msgs::Image> sub_rgb_img(node_handler, "camera/rgb/image_raw", 100);
+    message_filters::Subscriber<sensor_msgs::Image> sub_depth_img(node_handler, "camera/depth_registered/image_raw", 100);
 
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
     message_filters::Synchronizer<sync_pol> sync(sync_pol(10), sub_rgb_img, sub_depth_img);
@@ -102,28 +99,10 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const sensor_msgs::ImageConstPtr& msgD)
 {
-    imgRGBBuf_front.push(msgRGB);
-    imgDBuf_front.push(msgD);
-
-    if (mBufMutex.try_lock()) {
-        if (imgRGBBuf_front.size()!=imgDBuf_front.size()) {     // buffer size check
-            ROS_ERROR("Image size RGB != Depth. Drop all frames.");
-            while (!imgRGBBuf_front.empty()) {
-                imgRGBBuf_front.pop();
-            }
-            while (!imgDBuf_front.empty()) {
-                imgDBuf_front.pop();
-            }
-        } else {
-            while (!imgRGBBuf_front.empty()) {
-                imgRGBBuf.push(imgRGBBuf_front.front());
-                imgDBuf.push(imgDBuf_front.front());
-                imgRGBBuf_front.pop();
-                imgDBuf_front.pop();
-            }
-        }
-        mBufMutex.unlock();
-    }
+    mBufMutex.lock();
+    imgRGB = msgRGB;
+    imgD = msgD;
+    mBufMutex.unlock();
 }
 
 cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
@@ -144,52 +123,59 @@ cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
 
 void ImageGrabber::SyncWithImu()
 {
+    std::chrono::milliseconds tSleep(1);
     while(1)
     {
         if (this->mBufMutex.try_lock()) {
-            if(mpImuGb->mBufMutex.try_lock()) {
-                if (!imgRGBBuf.empty() && !imgDBuf.empty() && mpImuGb->imuBuf.size()>1)
-                {
-                    cv::Mat im, depth;
-                    double tIm = 0;
-                    tIm = imgRGBBuf.front()->header.stamp.toSec();  // image time
-                    if (tIm < mpImuGb->imuBuf.front()->header.stamp.toSec()) {  // drop image without imu
-                        ROS_WARN("Drop image without imu.");
-                        imgRGBBuf.pop();
-                        imgDBuf.pop();
-                    } else {
-                        ros::Time msg_time = imgRGBBuf.front()->header.stamp;
-                        im = GetImage(imgRGBBuf.front());
-                        depth = GetImage(imgDBuf.front());
-                        imgRGBBuf.pop();
-                        imgDBuf.pop();
+            if (nullptr!=imgRGB && nullptr!=imgD) {
+                if(mpImuGb->mBufMutex.try_lock()) {
+                    if (mpImuGb->imuBuf.size()>1) {
+                        cv::Mat im, depth;
+                        double tIm = imgRGB->header.stamp.toSec();  // image time
+                        if (tIm < mpImuGb->imuBuf.front()->header.stamp.toSec()) {  // drop image without imu
+                            ROS_WARN("Skip image without imu.");
+                            imgRGB=nullptr;
+                            imgD=nullptr;
+                            this->mBufMutex.unlock();
+                            mpImuGb->mBufMutex.unlock();
+                        } else {
+                            ros::Time msg_time = imgRGB->header.stamp;
+                            im = GetImage(imgRGB);
+                            depth = GetImage(imgD);
+                            imgRGB=nullptr;
+                            imgD=nullptr;
+                            this->mBufMutex.unlock();
 
-                        vector<ORB_SLAM3::IMU::Point> vImuMeas;
-                        vImuMeas.clear();
-                        Eigen::Vector3f Wbb;
-                        // Load imu measurements from buffer
-                        while(mpImuGb->imuBuf.front()->header.stamp.toSec() <= tIm)
-                        {
-                            cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
-                            cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
-                            double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
-                            vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc, gyr, t));
-                            Wbb << mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z;
-                            mpImuGb->imuBuf.pop();
+                            vector<ORB_SLAM3::IMU::Point> vImuMeas;
+                            vImuMeas.clear();
+                            Eigen::Vector3f Wbb;
+                            mpImuGb->sortImuQueue();
+                            // Load imu measurements from buffer
+                            while(mpImuGb->imuBuf.front()->header.stamp.toSec() <= tIm && !mpImuGb->imuBuf.empty()) {
+                                cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
+                                cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
+                                double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
+                                vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc, gyr, t));
+                                Wbb << mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z;
+                                mpImuGb->imuBuf.pop();
+                            }
+                            mpImuGb->mBufMutex.unlock();
+                            // ORB-SLAM3 runs in TrackRGBD()
+                            if (vImuMeas.empty()) {
+                                ROS_WARN("vImuMeas empty");
+                                continue;
+                            }
+                            pSLAM->TrackRGBD(im, depth, tIm, vImuMeas);
+                            publish_topics(msg_time, Wbb);
                         }
-                        // ORB-SLAM3 runs in TrackRGBD()
-                        if (vImuMeas.empty()) {
-                            ROS_WARN("vImuMeas empty");
-                        }
-                        Sophus::SE3f Tcw = pSLAM->TrackRGBD(im, depth, tIm, vImuMeas);
-                        publish_topics(msg_time, Wbb);
+                    } else {
+                        mpImuGb->mBufMutex.unlock();
                     }
                 }
-                mpImuGb->mBufMutex.unlock();
+            } else {
+                this->mBufMutex.unlock();
             }
-            this->mBufMutex.unlock();
         }
-        std::chrono::milliseconds tSleep(1);
         std::this_thread::sleep_for(tSleep);
     }
 }
@@ -203,5 +189,24 @@ void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
             imuBuf_front.pop();
         }
         mBufMutex.unlock();
+    }
+}
+
+void ImuGrabber::sortImuQueue() {
+    // Transfer elements from queue to vector
+    std::vector<sensor_msgs::ImuConstPtr> vec;
+    while (!imuBuf.empty()) {
+        vec.push_back(imuBuf.front());
+        imuBuf.pop();
+    }
+
+    // Sort vector based on timestamp
+    std::sort(vec.begin(), vec.end(),  [](sensor_msgs::ImuConstPtr a, sensor_msgs::ImuConstPtr b){
+        return a->header.stamp.toSec() < b->header.stamp.toSec();
+    });
+
+    // Transfer sorted elements back to queue
+    for (const auto& imu : vec) {
+        imuBuf.push(imu);
     }
 }

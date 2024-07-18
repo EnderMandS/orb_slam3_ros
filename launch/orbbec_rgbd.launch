@@ -1,30 +1,36 @@
 <launch>
+    <arg name="drone_id" value="0"/>
+
     <param name="use_sim_time" value="false" />
 
-    <!-- Main node -->
-    <node name="orb_slam3" pkg="orb_slam3_ros" type="ros_rgbd" output="screen">
-        <!-- change the topics according to the dataset -->
-        <remap from="/camera/rgb/image_raw"    to="/camera_orb/color/image_raw"/>
-        <remap from="/camera/depth_registered/image_raw"   to="/camera_orb/depth/image_raw"/>
+    <group ns="drone_$(arg drone_id)">
+        <!-- Main node -->
+        <node name="orb_slam3" pkg="orb_slam3_ros" type="ros_rgbd" output="screen" >
+            <!-- change the topics according to the dataset -->
+            <remap from="camera/rgb/image_raw"                to="camera_orb/color/image_raw"/>
+            <remap from="camera/depth_registered/image_raw"   to="camera_orb/depth/image_raw"/>
 
-        <!-- Parameters for original ORB-SLAM3 -->
-        <param name="voc_file"      type="string" value="$(find orb_slam3_ros)/orb_slam3/Vocabulary/ORBvoc.txt.bin"/>
-        <param name="settings_file" type="string" value="$(find orb_slam3_ros)/config/RGB-D/gemini2.yaml"/>
+            <!-- Parameters for original ORB-SLAM3 -->
+            <param name="voc_file"      type="string" value="$(find orb_slam3_ros)/orb_slam3/Vocabulary/ORBvoc.txt.bin"/>
+            <param name="settings_file" type="string" value="$(find orb_slam3_ros)/config/RGB-D/gemini2.yaml"/>
 
-        <!-- Parameters for ROS -->
-        <param name="world_frame_id"    type="string"   value="odom_camera" />
-        <param name="cam_frame_id"      type="string"   value="camera" />
-        <!-- <param name="enable_pangolin"   type="bool"     value="false" /> -->
-    </node>
-    
-    <!-- Trajectory path -->
-    <node pkg="hector_trajectory_server" type="hector_trajectory_server" name="trajectory_server_orb_slam3" output="screen" ns="orb_slam3_ros" >
-        <param name="/target_frame_name" value="/odom" />
-        <param name="/source_frame_name" value="/camera" />
-        <param name="/trajectory_update_rate" value="10.0" />
-        <param name="/trajectory_publish_rate" value="10.0" />
-    </node>
+            <!-- Parameters for ROS -->
+            <param name="world_frame_id"    type="string"   value="drone_$(arg drone_id)/odom_camera" />
+            <param name="cam_frame_id"      type="string"   value="drone_$(arg drone_id)/camera" />
+        </node>
+        
+        <!-- Trajectory path -->
+        <node pkg="hector_trajectory_server" type="hector_trajectory_server" name="trajectory_server_orb_slam3" output="screen" ns="orb_slam3_ros" >
+            <param name="/target_frame_name" value="drone_$(arg drone_id)/odom" />
+            <param name="/source_frame_name" value="drone_$(arg drone_id)/camera" />
+            <param name="/trajectory_update_rate" value="10.0" />
+            <param name="/trajectory_publish_rate" value="10.0" />
+        </node>
 
-    <node pkg="tf" type="static_transform_publisher" name="tf_odom_odomcam" args="0 0 0 -0.5 0.5 -0.5 0.5 odom odom_camera 1"/>
-    <node pkg="tf" type="static_transform_publisher" name="tf_cam_baselink" args="0 0 0 0.5 -0.5 0.5 0.5 camera base_link 1"/>
+        <node pkg="tf" type="static_transform_publisher" name="tf_odom_odomcam"
+            args="0 0 0 -0.5 0.5 -0.5 0.5 drone_$(arg drone_id)/odom drone_$(arg drone_id)/odom_camera 1"/>
+        <node pkg="tf" type="static_transform_publisher" name="tf_cam_baselink"
+            args="0 0 0 0.5 -0.5 0.5 0.5 drone_$(arg drone_id)/camera drone_$(arg drone_id)/base_link 1"/>
+
+    </group>
 </launch>

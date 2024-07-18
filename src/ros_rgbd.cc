@@ -59,8 +59,8 @@ int main(int argc, char **argv)
 
     ImageGrabber igb;
 
-    message_filters::Subscriber<sensor_msgs::Image> sub_rgb_img(node_handler, "/camera/rgb/image_raw", 100);
-    message_filters::Subscriber<sensor_msgs::Image> sub_depth_img(node_handler, "/camera/depth_registered/image_raw", 100);
+    message_filters::Subscriber<sensor_msgs::Image> sub_rgb_img(node_handler, "camera/rgb/image_raw", 100);
+    message_filters::Subscriber<sensor_msgs::Image> sub_depth_img(node_handler, "camera/depth_registered/image_raw", 100);
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
     message_filters::Synchronizer<sync_pol> sync(sync_pol(10), sub_rgb_img, sub_depth_img);
     sync.registerCallback(boost::bind(&ImageGrabber::GrabRGBD, &igb, _1, _2));
